@@ -81,9 +81,9 @@ MonoBehaviour:
       m_Calls: []
     m_ActionId: ccc0d067-6909-47f8-ab43-fd0556b9b18c
     m_ActionName: Player/DashRight[/Keyboard/d,/DualShock4GamepadHID/dpad/right]
-  m_NeverAutoSwitchControlSchemes: 0
-  m_DefaultControlScheme: Controller
-  m_DefaultActionMap: Player
+  m_NeverAutoSwitchControlSchemes: 1
+  m_DefaultControlScheme: 
+  m_DefaultActionMap: 
   m_SplitScreenIndex: -1
   m_Camera: {fileID: 0}
 --- !u!50 &2473387122495585407

@@ -2,11 +2,15 @@ using System;
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.InputSystem;
 using DG.Tweening;
+
 
 [RequireComponent(typeof(Rigidbody2D)), RequireComponent(typeof(BoxCollider2D))]
 public class PlayerController : MonoBehaviour
 {
+    PlayerInput playerInput;
+    InputActionMap inputActionMap;
     PlayerInputSettings settings;
     Rigidbody2D rigid2D;
     BoxCollider2D boxCollider2D;
@@ -80,40 +84,68 @@ public class PlayerController : MonoBehaviour
     bool InputRecieved { get { return Mathf.Abs(movementInput) > 0.01f; } }
     bool IsDashing { get { return dash != 0; } }
 
-
     private void Awake()
     {
+        playerInput = GetComponent<PlayerInput>();
+        inputActionMap = playerInput.actions.FindActionMap("Player" + (playerInput.playerIndex + 1).ToString());
+        inputActionMap.Enable();
         rigid2D = GetComponent<Rigidbody2D>();
         boxCollider2D = GetComponent<BoxCollider2D>();
     }
 
     private void Start()
     {
-        settings = new PlayerInputSettings();
+        settings = InputManager.Instance.PlayerInputSettings;
 
         if(checkForWallCollision)
             hits = new RaycastHit2D[9];
         else
             hits = new RaycastHit2D[3];
 
-        settings.Enable();
-        settings.Player.Movement.performed += Movement;
-        settings.Player.Movement.canceled += Movement_canceled;
-        settings.Player.Jump.started += Jump;
-        settings.Player.Jump.canceled += Jump_canceled;
-        settings.Player.DashLeft.started += DashLeft_started;
-        settings.Player.DashRight.started += DashRight_started;
+        inputActionMap.FindAction("Movement").performed += Movement_performed;
+        inputActionMap.FindAction("Movement").canceled += Movement_canceled;
+        inputActionMap.FindAction("Jump").started += Jump_started;
+        inputActionMap.FindAction("Jump").canceled += Jump_canceled;
+        inputActionMap.FindAction("DashLeft").started += DashLeft_started;
+        inputActionMap.FindAction("DashRight").started += DashRight_started;
+        //settings.Player.Movement.performed += context => Movement(context);
+        //settings.Player.Movement.canceled += context => Movement_canceled(context);
+        //settings.Player.Jump.started += context => Jump(context);
+        //settings.Player.Jump.canceled += context => Jump_canceled(context);
+        //settings.Player.DashLeft.started += context => DashLeft_started(context);
+        //settings.Player.DashRight.started += context => DashRight_started(context);
+    }    
+    private void Movement_performed(UnityEngine.InputSystem.InputAction.CallbackContext obj)
+    {
+        movementInput = obj.ReadValue<float>();
+    }
+
+    private void Movement_canceled(UnityEngine.InputSystem.InputAction.CallbackContext obj)
+    {
+        movementInput = 0f;
+    }    
+
+    private void Jump_started(UnityEngine.InputSystem.InputAction.CallbackContext obj)
+    {
+        Jump();
+    }
+
+    private void Jump_canceled(UnityEngine.InputSystem.InputAction.CallbackContext obj)
+    {
+        jump_release = true;
     }
 
     private void DashRight_started(UnityEngine.InputSystem.InputAction.CallbackContext obj)
     {
+
         Dash(true);
     }    
 
     private void DashLeft_started(UnityEngine.InputSystem.InputAction.CallbackContext obj)
     {
         Dash(false);
-    }
+    }    
+
     private void Dash(bool right)
     {
         if (!canDash) return;
@@ -142,13 +174,9 @@ public class PlayerController : MonoBehaviour
                 dashTween.Kill();
             });
     }
+    
 
-    private void Jump(UnityEngine.InputSystem.InputAction.CallbackContext obj)
-    {
-        ExecuteJump();
-    }
-
-    private void ExecuteJump()
+    private void Jump()
     {
         if (!IsGrounded)
         {
@@ -169,21 +197,7 @@ public class PlayerController : MonoBehaviour
         rigid2D.velocity = new Vector2(Velocity.x, 0f);
         rigid2D.AddForce(Vector2.up * jumpForce, ForceMode2D.Impulse);
     }
-
-    private void Jump_canceled(UnityEngine.InputSystem.InputAction.CallbackContext obj)
-    {
-        jump_release = true;
-    }
-
-    private void Movement_canceled(UnityEngine.InputSystem.InputAction.CallbackContext obj)
-    {
-        movementInput = 0f;
-    }
-
-    private void Movement(UnityEngine.InputSystem.InputAction.CallbackContext obj)
-    {
-        movementInput = obj.ReadValue<float>();
-    }
+    
 
     private void FixedUpdate()
     {
@@ -254,7 +268,7 @@ public class PlayerController : MonoBehaviour
         {
             jumpCount = 0;
             if (!jump_release)
-                ExecuteJump();
+                Jump();
             else
             {
                 jumping = false;
