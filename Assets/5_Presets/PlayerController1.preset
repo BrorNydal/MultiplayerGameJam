@@ -25,6 +25,10 @@ Preset:
     value: 
     objectReference: {fileID: 0}
   - target: {fileID: 0}
+    propertyPath: actionMap
+    value: Player
+    objectReference: {fileID: 0}
+  - target: {fileID: 0}
     propertyPath: ground.m_Bits
     value: 8
     objectReference: {fileID: 0}
@@ -99,5 +103,9 @@ Preset:
   - target: {fileID: 0}
     propertyPath: obstacles.m_Bits
     value: 8
+    objectReference: {fileID: 0}
+  - target: {fileID: 0}
+    propertyPath: localMultiplayer
+    value: 1
     objectReference: {fileID: 0}
   m_ExcludedProperties: []

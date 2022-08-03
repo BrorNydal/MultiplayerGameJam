@@ -4,16 +4,18 @@ using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.InputSystem;
 using DG.Tweening;
+using UnityEngine.Events;
 
 
 [RequireComponent(typeof(Rigidbody2D)), RequireComponent(typeof(BoxCollider2D))]
-public class PlayerController : MonoBehaviour
+public class PlayerMovement : MonoBehaviour
 {
     PlayerInput playerInput;
     InputActionMap inputActionMap;
     PlayerInputSettings settings;
     Rigidbody2D rigid2D;
     BoxCollider2D boxCollider2D;
+    EventDictionary eventDictionary;
 
     [Header("CONTROLLER")]
     [SerializeField]
@@ -70,7 +72,7 @@ public class PlayerController : MonoBehaviour
 
     [Header("LOCAL MULTIPLAYER")]
     [SerializeField]
-    bool localMultiplayer = false;
+    bool localMultiplayer = false;    
 
     float movementInput = 0f;
     bool grounded = false;
@@ -93,20 +95,51 @@ public class PlayerController : MonoBehaviour
     bool IsDashing { get { return dash != 0; } }
 
     private void Awake()
-    {
-        playerInput = GetComponent<PlayerInput>();
-        if(localMultiplayer)
-            inputActionMap = playerInput.actions.FindActionMap(actionMap + (playerInput.playerIndex + 1).ToString());
-        else
+    {        
+        if (!localMultiplayer)
             inputActionMap = playerInput.actions.FindActionMap(actionMap);
-
-        if (inputActionMap != null)
-            inputActionMap.Enable();
-        else
-            Debug.LogWarning("InputActionMap Null!");
 
         rigid2D = GetComponent<Rigidbody2D>();
         boxCollider2D = GetComponent<BoxCollider2D>();
+        eventDictionary = GetComponent<EventDictionary>();
+    }
+
+    public void SetPlayerInput(PlayerInput input)
+    {
+        playerInput = input;
+    }
+
+    public void ChangeInputActionMap(InputActionMap actionMap)
+    {
+        Debug.Log("Setting action map for " + gameObject.name);
+
+        if (actionMap != null)
+        {
+            inputActionMap = actionMap;
+            inputActionMap.Enable();
+          
+            inputActionMap.FindAction("Movement").performed += Movement_performed;
+            inputActionMap.FindAction("Movement").canceled += Movement_canceled;
+            inputActionMap.FindAction("Jump").started += Jump_started;
+            inputActionMap.FindAction("Jump").canceled += Jump_canceled;
+            inputActionMap.FindAction("DashLeft").started += DashLeft_started;
+            inputActionMap.FindAction("DashRight").started += DashRight_started;
+        }
+        else
+            Debug.LogWarning("InputActionMap Null!");
+    }
+
+    PlayerMovement secondKeyboard;
+    public bool HasSecondKeyboard { get { return secondKeyboard != null; } }
+    public void AttachSecondKeyboard(PlayerMovement second)
+    {
+        secondKeyboard = second;
+        inputActionMap.FindAction("Movement2").performed += second.Movement_performed;
+        inputActionMap.FindAction("Movement2").canceled += second.Movement_canceled;
+        inputActionMap.FindAction("Jump2").started += second.Jump_started;
+        inputActionMap.FindAction("Jump2").canceled += second.Jump_canceled;
+        inputActionMap.FindAction("DashLeft2").started += second.DashLeft_started;
+        inputActionMap.FindAction("DashRight2").started += second.DashRight_started;
     }
 
     private void Start()
@@ -116,17 +149,8 @@ public class PlayerController : MonoBehaviour
         if(checkForWallCollision)
             hits = new RaycastHit2D[9];
         else
-            hits = new RaycastHit2D[3];
-
-        if (localMultiplayer)
-        {
-            inputActionMap.FindAction("Movement").performed += Movement_performed;
-            inputActionMap.FindAction("Movement").canceled += Movement_canceled;
-            inputActionMap.FindAction("Jump").started += Jump_started;
-            inputActionMap.FindAction("Jump").canceled += Jump_canceled;
-            inputActionMap.FindAction("DashLeft").started += DashLeft_started;
-            inputActionMap.FindAction("DashRight").started += DashRight_started;
-        }
+            hits = new RaycastHit2D[3];   
+        
 
         //settings.Player.Movement.performed += context => Movement(context);
         //settings.Player.Movement.canceled += context => Movement_canceled(context);
@@ -147,7 +171,7 @@ public class PlayerController : MonoBehaviour
 
     private void Jump_started(UnityEngine.InputSystem.InputAction.CallbackContext obj)
     {
-        Jump();
+        Jump();        
     }
 
     private void Jump_canceled(UnityEngine.InputSystem.InputAction.CallbackContext obj)
@@ -157,13 +181,13 @@ public class PlayerController : MonoBehaviour
 
     private void DashRight_started(UnityEngine.InputSystem.InputAction.CallbackContext obj)
     {
-
         Dash(true);
     }    
 
     private void DashLeft_started(UnityEngine.InputSystem.InputAction.CallbackContext obj)
     {
         Dash(false);
+        
     }    
 
     private void Dash(bool right)
@@ -193,6 +217,8 @@ public class PlayerController : MonoBehaviour
                 dash = 0;
                 dashTween.Kill();
             });
+
+        eventDictionary?.Invoke("Dash");
     }
     
 
@@ -204,6 +230,7 @@ public class PlayerController : MonoBehaviour
             {
                 rigid2D.velocity = new Vector2(Velocity.x, 0f);
                 rigid2D.AddForce(Vector2.up * jumpForce, ForceMode2D.Impulse);
+                eventDictionary?.Invoke("MultiJump");
                 jumpCount++;
             }
 
@@ -216,6 +243,7 @@ public class PlayerController : MonoBehaviour
         jumping = true;
         rigid2D.velocity = new Vector2(Velocity.x, 0f);
         rigid2D.AddForce(Vector2.up * jumpForce, ForceMode2D.Impulse);
+        eventDictionary?.Invoke("Jump");
     }
     
 
