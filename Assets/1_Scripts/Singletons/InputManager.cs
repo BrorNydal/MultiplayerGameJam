@@ -51,7 +51,6 @@ public class InputManager : Singleton<InputManager>
         else
             Debug.Log("No player controller found!");
 
-        input.defaultActionMap = input.gameObject.name;
         players[playersActive] = input;   
         
         playersActive++; 

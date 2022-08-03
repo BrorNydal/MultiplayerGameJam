@@ -83,7 +83,7 @@ MonoBehaviour:
     m_ActionName: Player/DashRight[/Keyboard/d,/DualShock4GamepadHID/dpad/right]
   m_NeverAutoSwitchControlSchemes: 1
   m_DefaultControlScheme: 
-  m_DefaultActionMap: 
+  m_DefaultActionMap: Player1
   m_SplitScreenIndex: -1
   m_Camera: {fileID: 0}
 --- !u!50 &2473387122495585407
@@ -145,6 +145,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 9dd03196509c04b43aa7320408eadfd5, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+  actionMap: Player
   ground:
     serializedVersion: 2
     m_Bits: 8
@@ -162,11 +163,12 @@ MonoBehaviour:
   multiJumpFallingThreshold: -10
   dashDuration: 0.15
   dashDistance: 5
-  dashCurve: 2
+  dashCurve: 1
   dashCooldown: 1
   obstacles:
     serializedVersion: 2
     m_Bits: 8
+  localMultiplayer: 1
 --- !u!1 &2473387123387585139
 GameObject:
   m_ObjectHideFlags: 0

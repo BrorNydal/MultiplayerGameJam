@@ -15,6 +15,10 @@ public class PlayerController : MonoBehaviour
     Rigidbody2D rigid2D;
     BoxCollider2D boxCollider2D;
 
+    [Header("CONTROLLER")]
+    [SerializeField]
+    string actionMap = "Player";
+
     [Header("COLLISION")]
     [SerializeField]
     LayerMask ground;
@@ -64,6 +68,10 @@ public class PlayerController : MonoBehaviour
     [Header("WALLS")]
     bool checkForWallCollision = false;
 
+    [Header("LOCAL MULTIPLAYER")]
+    [SerializeField]
+    bool localMultiplayer = false;
+
     float movementInput = 0f;
     bool grounded = false;
     RaycastHit2D[] hits;
@@ -87,8 +95,16 @@ public class PlayerController : MonoBehaviour
     private void Awake()
     {
         playerInput = GetComponent<PlayerInput>();
-        inputActionMap = playerInput.actions.FindActionMap("Player" + (playerInput.playerIndex + 1).ToString());
-        inputActionMap.Enable();
+        if(localMultiplayer)
+            inputActionMap = playerInput.actions.FindActionMap(actionMap + (playerInput.playerIndex + 1).ToString());
+        else
+            inputActionMap = playerInput.actions.FindActionMap(actionMap);
+
+        if (inputActionMap != null)
+            inputActionMap.Enable();
+        else
+            Debug.LogWarning("InputActionMap Null!");
+
         rigid2D = GetComponent<Rigidbody2D>();
         boxCollider2D = GetComponent<BoxCollider2D>();
     }
@@ -102,12 +118,16 @@ public class PlayerController : MonoBehaviour
         else
             hits = new RaycastHit2D[3];
 
-        inputActionMap.FindAction("Movement").performed += Movement_performed;
-        inputActionMap.FindAction("Movement").canceled += Movement_canceled;
-        inputActionMap.FindAction("Jump").started += Jump_started;
-        inputActionMap.FindAction("Jump").canceled += Jump_canceled;
-        inputActionMap.FindAction("DashLeft").started += DashLeft_started;
-        inputActionMap.FindAction("DashRight").started += DashRight_started;
+        if (localMultiplayer)
+        {
+            inputActionMap.FindAction("Movement").performed += Movement_performed;
+            inputActionMap.FindAction("Movement").canceled += Movement_canceled;
+            inputActionMap.FindAction("Jump").started += Jump_started;
+            inputActionMap.FindAction("Jump").canceled += Jump_canceled;
+            inputActionMap.FindAction("DashLeft").started += DashLeft_started;
+            inputActionMap.FindAction("DashRight").started += DashRight_started;
+        }
+
         //settings.Player.Movement.performed += context => Movement(context);
         //settings.Player.Movement.canceled += context => Movement_canceled(context);
         //settings.Player.Jump.started += context => Jump(context);
