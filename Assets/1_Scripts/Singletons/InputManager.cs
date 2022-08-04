@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.InputSystem;
 using DcClass;
+using UnityEngine.InputSystem.Users;
 
 [System.Serializable]
 public enum ControllerType
@@ -22,13 +23,13 @@ public class InputManager : Singleton<InputManager>
     public const int MAX_PLAYERS = 4;
 
     int playersActive = 0;
+    bool RoomForPlayers { get { return playersActive < MAX_PLAYERS; } }
     Dictionary<ControllerType, int> controllerCount = new Dictionary<ControllerType, int>();    
+    PlayerInput[] players = new PlayerInput[MAX_PLAYERS];
+    InputDevice[] devices = new InputDevice[MAX_PLAYERS];
 
-    bool Space { get { return playersActive < MAX_PLAYERS; } }
-
-    PlayerControllerData[] players = new PlayerControllerData[4];
-
-    [SerializeField] InputAction controllerJoin;    
+    [SerializeField] GameObject playerPrefab;
+    [SerializeField] InputAction controllerJoin;
     [SerializeField] InputAction leaveAction;
     [SerializeField] InputAction keyboardJoin;
     [SerializeField] InputAction secondaryKeyboardJoin;
@@ -37,8 +38,8 @@ public class InputManager : Singleton<InputManager>
     public PlayerInputSettings PlayerInputSettings { get { return playerInputSettings; } }
 
     ControllerType joiningControllerType;
-    
-    
+
+    List<int> secondaryKeyboards;
 
     protected override void Awake()
     {
@@ -53,14 +54,11 @@ public class InputManager : Singleton<InputManager>
         controllerCount.Add(ControllerType.Keyboard, 0);
         controllerCount.Add(ControllerType.SecondaryKeyboard, 0);
 
-        PlayerInputManager.instance.onPlayerJoined += OnPlayerJoined;
-        PlayerInputManager.instance.onPlayerLeft += OnPlayerLeft;
-
         controllerJoin.Enable();
         controllerJoin.started += gamepadJoinAction_started;
 
         leaveAction.Enable();
-        leaveAction.started += LeaveAction_started;
+        //leaveAction.started += LeaveAction_started;
 
         keyboardJoin.Enable();
         keyboardJoin.started += keyboardJoinAction_started;
@@ -69,91 +67,69 @@ public class InputManager : Singleton<InputManager>
         secondaryKeyboardJoin.started += SecondaryKeyboardJoin_started;
     }
 
-    private void SecondaryKeyboardJoin_started(InputAction.CallbackContext obj)
-    {
-        if (Space && controllerCount[ControllerType.Keyboard] > 0 && controllerCount[ControllerType.SecondaryKeyboard] <= 2)
-        {
-            joiningControllerType = ControllerType.SecondaryKeyboard;
-            PlayerInputManager.instance.JoinPlayer(playersActive);
-        }
-    }    
-
     private void keyboardJoinAction_started(InputAction.CallbackContext obj)
     {
-        if (Space && controllerCount[ControllerType.Keyboard] <= 2)
+        if (DeviceExists(obj.control.device)) return;
+        if (RoomForPlayers && controllerCount[ControllerType.Keyboard] <= 2)
         {
-            joiningControllerType = ControllerType.Keyboard;
-            PlayerInputManager.instance.JoinPlayer(playersActive);            
+            devices[playersActive] = obj.control.device;
+            PlayerInput input = PlayerInput.Instantiate(playerPrefab, controlScheme: "Keyboard");
+            PlayerJoin(input);
+            controllerCount[ControllerType.Keyboard]++;
+            //joiningControllerType = ControllerType.Keyboard;
+            //PlayerInputManager.instance.JoinPlayer(playersActive);
+        }
+    }
+
+    private void SecondaryKeyboardJoin_started(InputAction.CallbackContext obj)
+    {
+        if (RoomForPlayers && controllerCount[ControllerType.Keyboard] > 0 && controllerCount[ControllerType.SecondaryKeyboard] < controllerCount[ControllerType.Keyboard])
+        {
+            devices[playersActive] = obj.control.device;
+            PlayerInput input = PlayerInput.Instantiate(playerPrefab, controlScheme: "RightKeyboard", pairWithDevice: Keyboard.current);
+            PlayerJoin(input);
+            controllerCount[ControllerType.SecondaryKeyboard]++;
         }
     }
 
     private void gamepadJoinAction_started(InputAction.CallbackContext obj)
     {
-        if (Space && controllerCount[ControllerType.Gamepad] <= 4)
+        if (DeviceExists(obj.control.device)) return;
+        if (RoomForPlayers && controllerCount[ControllerType.Gamepad] <= 4)
         {
-            joiningControllerType = ControllerType.Gamepad;
-            PlayerInputManager.instance.JoinPlayerFromActionIfNotAlreadyJoined(obj);
+            devices[playersActive] = obj.control.device;
+            PlayerInput input = PlayerInput.Instantiate(playerPrefab, controlScheme: "Gamepad");
+            PlayerJoin(input);
+            controllerCount[ControllerType.Gamepad]++;
+            //PlayerInput.Instantiate(playerPrefab, controlScheme: "Gamepad");
+            //joiningControllerType = ControllerType.Gamepad;
+            //PlayerInputManager.instance.JoinPlayerFromActionIfNotAlreadyJoined(obj);
         }
     }
-
-    private void OnPlayerJoined(PlayerInput input)
+    private void PlayerJoin(PlayerInput input)
     {
-        PlayerControllerData data;
-        data.playerInput = input;
+        PlayerMovement movement = input.GetComponent<PlayerMovement>();
 
-        input.gameObject.name = "Player" + (playersActive + 1).ToString();
-
-        PlayerMovement playerMovement = input.GetComponent<PlayerMovement>();
-        data.playerMovement = playerMovement;
-        data.ControllerType = joiningControllerType;
-
-        if (playerMovement)
+        if (movement != null)
         {
-            controllerCount[joiningControllerType]++;
-
-            switch (joiningControllerType)
-            {
-                case ControllerType.Gamepad:
-                    playerMovement.SetPlayerInput(input);
-                    playerMovement.ChangeInputActionMap(input.actions.FindActionMap("Player" + (controllerCount[ControllerType.Gamepad]).ToString()));
-                    break;
-                case ControllerType.Keyboard:
-                    playerMovement.SetPlayerInput(input);
-                    playerMovement.ChangeInputActionMap(input.actions.FindActionMap("PlayerK" + (controllerCount[ControllerType.Keyboard]).ToString()));
-                    break;
-                case ControllerType.SecondaryKeyboard:
-                    playerMovement.SetPlayerInput(input);
-                    
-                    for(int i = 0; i < MAX_PLAYERS; i++)
-                    {
-                        if (players[i].ControllerType == ControllerType.Keyboard && !players[i].playerMovement.HasSecondKeyboard)
-                            players[i].playerMovement.AttachSecondKeyboard(playerMovement);
-                    }
-
-                    //playerMovement.ChangeInputActionMap(input.actions.FindActionMap("PlayerK" + (controllerCount[ControllerType.SecondaryKeyboard]).ToString()));
-                    break;
-            }
+            movement.PlayerInput = input;
+            movement.InputActionMap = input.currentActionMap;
         }
-        else
-            Debug.Log("No player controller found!");
 
-        players[playersActive] = data;        
+        players[playersActive] = input;
         playersActive++;
+        input.gameObject.name = "Player" + playersActive.ToString();
     }
 
-    private void OnPlayerLeft(PlayerInput input)
+    private bool DeviceExists(InputDevice device)
     {
-        //for(int i = 0; i < MAX_PLAYERS; i++)
-        //{
-        //    if(input == players[i])
-        //    {
-        //        players[i] = null;
-        //        playersActive--;
-        //    }
-        //}
-    }    
+        bool exists = false;
 
-    private void LeaveAction_started(InputAction.CallbackContext obj)
-    {
+        foreach(var dev in devices)
+        {
+            if (dev == device) exists = true;
+        }
+
+        return exists;
     }
 }

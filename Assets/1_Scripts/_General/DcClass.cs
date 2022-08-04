@@ -149,7 +149,6 @@ namespace DcClass
             else
             {
                 instance = gameObject.GetComponent<T>();
-                DontDestroyOnLoad(instance);
             }
         }
     }

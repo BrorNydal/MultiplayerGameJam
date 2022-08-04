@@ -11,11 +11,30 @@ using UnityEngine.Events;
 public class PlayerMovement : MonoBehaviour
 {
     PlayerInput playerInput;
-    InputActionMap inputActionMap;
+    public PlayerInput PlayerInput { get { return playerInput; } set { playerInput = value; } }
+    
     PlayerInputSettings settings;
     Rigidbody2D rigid2D;
     BoxCollider2D boxCollider2D;
     EventDictionary eventDictionary;
+
+    /// <summary>
+    /// An action map must be set before taking control.
+    /// </summary>
+    InputActionMap inputActionMap;
+    public InputActionMap InputActionMap
+    {
+        get {  return inputActionMap; }
+        set { inputActionMap = value;
+            inputActionMap.Enable();
+            inputActionMap.FindAction("Movement").performed += Movement_performed;
+            inputActionMap.FindAction("Movement").canceled += Movement_canceled;
+            inputActionMap.FindAction("Jump").started += Jump_started;
+            inputActionMap.FindAction("Jump").canceled += Jump_canceled;
+            inputActionMap.FindAction("DashLeft").started += DashLeft_started;
+            inputActionMap.FindAction("DashRight").started += DashRight_started;
+        }
+    }
 
     [Header("CONTROLLER")]
     [SerializeField]
@@ -23,9 +42,7 @@ public class PlayerMovement : MonoBehaviour
 
     [Header("COLLISION")]
     [SerializeField]
-    LayerMask ground;
-    [SerializeField]
-    Vector2 boxExtent = Vector2.one;
+    LayerMask ground;    
     [SerializeField]
     float rayLength = 0.1f;
 
@@ -70,10 +87,7 @@ public class PlayerMovement : MonoBehaviour
     [Header("WALLS")]
     bool checkForWallCollision = false;
 
-    [Header("LOCAL MULTIPLAYER")]
-    [SerializeField]
-    bool localMultiplayer = false;    
-
+    Vector2 boxExtent = Vector2.one;
     float movementInput = 0f;
     bool grounded = false;
     RaycastHit2D[] hits;
@@ -94,52 +108,14 @@ public class PlayerMovement : MonoBehaviour
     bool InputRecieved { get { return Mathf.Abs(movementInput) > 0.01f; } }
     bool IsDashing { get { return dash != 0; } }
 
+    bool lastFalling = true;
+
     private void Awake()
     {        
-        if (!localMultiplayer)
-            inputActionMap = playerInput.actions.FindActionMap(actionMap);
-
         rigid2D = GetComponent<Rigidbody2D>();
         boxCollider2D = GetComponent<BoxCollider2D>();
+        boxExtent = boxCollider2D.bounds.size / 2f;
         eventDictionary = GetComponent<EventDictionary>();
-    }
-
-    public void SetPlayerInput(PlayerInput input)
-    {
-        playerInput = input;
-    }
-
-    public void ChangeInputActionMap(InputActionMap actionMap)
-    {
-        Debug.Log("Setting action map for " + gameObject.name);
-
-        if (actionMap != null)
-        {
-            inputActionMap = actionMap;
-            inputActionMap.Enable();
-          
-            inputActionMap.FindAction("Movement").performed += Movement_performed;
-            inputActionMap.FindAction("Movement").canceled += Movement_canceled;
-            inputActionMap.FindAction("Jump").started += Jump_started;
-            inputActionMap.FindAction("Jump").canceled += Jump_canceled;
-            inputActionMap.FindAction("DashLeft").started += DashLeft_started;
-            inputActionMap.FindAction("DashRight").started += DashRight_started;
-        }
-        else
-            Debug.LogWarning("InputActionMap Null!");
-    }
-
-    PlayerMovement secondKeyboard;
-    public bool HasSecondKeyboard { get { return secondKeyboard != null; } }
-    public void AttachSecondKeyboard(PlayerMovement second)
-    {
-        secondKeyboard = second;
-        inputActionMap.FindAction("Movement2").performed += second.Movement_performed;
-        inputActionMap.FindAction("Movement2").canceled += second.Movement_canceled;
-        inputActionMap.FindAction("Jump2").started += second.Jump_started;
-        inputActionMap.FindAction("Jump2").canceled += second.Jump_canceled;
-        inputActionMap.FindAction("DashLeft2").started += second.DashLeft_started;
-        inputActionMap.FindAction("DashRight2").started += second.DashRight_started;
     }
 
     private void Start()
@@ -150,23 +126,39 @@ public class PlayerMovement : MonoBehaviour
             hits = new RaycastHit2D[9];
         else
             hits = new RaycastHit2D[3];   
-        
+    }
 
-        //settings.Player.Movement.performed += context => Movement(context);
-        //settings.Player.Movement.canceled += context => Movement_canceled(context);
-        //settings.Player.Jump.started += context => Jump(context);
-        //settings.Player.Jump.canceled += context => Jump_canceled(context);
-        //settings.Player.DashLeft.started += context => DashLeft_started(context);
-        //settings.Player.DashRight.started += context => DashRight_started(context);
-    }    
+    private void OnDestroy()
+    {
+        inputActionMap.FindAction("Movement").performed -= Movement_performed;
+        inputActionMap.FindAction("Movement").canceled -= Movement_canceled;
+        inputActionMap.FindAction("Jump").started -= Jump_started;
+        inputActionMap.FindAction("Jump").canceled -= Jump_canceled;
+        inputActionMap.FindAction("DashLeft").started -= DashLeft_started;
+        inputActionMap.FindAction("DashRight").started -= DashRight_started;
+    }
+
     private void Movement_performed(UnityEngine.InputSystem.InputAction.CallbackContext obj)
     {
         movementInput = obj.ReadValue<float>();
+
+        if (!IsDashing)
+        {
+            if(IsGrounded)
+                eventDictionary?.Invoke("Run");
+
+            if(movementInput > 0f)
+                eventDictionary?.Invoke("Right");
+            else
+                eventDictionary?.Invoke("Left");
+        }
     }
 
     private void Movement_canceled(UnityEngine.InputSystem.InputAction.CallbackContext obj)
     {
         movementInput = 0f;
+
+        eventDictionary?.Invoke("Stop");
     }    
 
     private void Jump_started(UnityEngine.InputSystem.InputAction.CallbackContext obj)
@@ -186,8 +178,7 @@ public class PlayerMovement : MonoBehaviour
 
     private void DashLeft_started(UnityEngine.InputSystem.InputAction.CallbackContext obj)
     {
-        Dash(false);
-        
+        Dash(false);        
     }    
 
     private void Dash(bool right)
@@ -215,6 +206,7 @@ public class PlayerMovement : MonoBehaviour
             .OnComplete(() =>
             {
                 dash = 0;
+                eventDictionary?.Invoke("StopDash");
                 dashTween.Kill();
             });
 
@@ -286,12 +278,16 @@ public class PlayerMovement : MonoBehaviour
             Landed(jumping);
         }
 
-        //Handle Jump
-        if(jumping && IsGrounded)
+        if(!lastFalling && IsFalling)
         {
-
+            eventDictionary?.Invoke("Fall");
+            lastFalling = true;
         }
-        else if(jumping && InAir)
+
+        lastFalling = InAir && Velocity.y < 0f;
+
+        //Handle Jump
+        if(jumping && InAir)
         {
             if (jump_release)
                 rigid2D.AddForce(-Vector2.up * jumpReleaseForce);
@@ -314,6 +310,8 @@ public class PlayerMovement : MonoBehaviour
     {
         if(wasJumping)
         {
+            eventDictionary?.Invoke("Land");
+
             jumpCount = 0;
             if (!jump_release)
                 Jump();
@@ -321,7 +319,7 @@ public class PlayerMovement : MonoBehaviour
             {
                 jumping = false;
                 jump_release = false;
-            }
+            }            
         }
     }
 
