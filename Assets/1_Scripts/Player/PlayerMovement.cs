@@ -13,7 +13,9 @@ public class PlayerMovement : MonoBehaviour
     PlayerInput playerInput;
     public PlayerInput PlayerInput { get { return playerInput; } set { playerInput = value; } }
     
-    PlayerInputSettings settings;
+    PlayerInputSettings playerInputSettings;
+    public PlayerInputSettings PlayerInputSettings { get { return playerInputSettings; } set { playerInputSettings = value; } }
+
     Rigidbody2D rigid2D;
     BoxCollider2D boxCollider2D;
     EventDictionary eventDictionary;
@@ -91,13 +93,21 @@ public class PlayerMovement : MonoBehaviour
     float movementInput = 0f;
     bool grounded = false;
     RaycastHit2D[] hits;
+
     bool jumping = false;
     bool jump_release = false;
     int jumpCount = 0;
+    bool CanJump { get
+        {
+            return jumpCount < multiJumps;
+        } }
+
     bool canDash = true;
     int dash = 0;
     float dashCounter = 0f;
     Tween dashTween = null;
+
+    string state;
 
     Vector3 Velocity { get { return rigid2D.velocity; } }
     bool IsGrounded { get { return grounded; } }
@@ -120,7 +130,7 @@ public class PlayerMovement : MonoBehaviour
 
     private void Start()
     {
-        settings = InputManager.Instance.PlayerInputSettings;
+        //settings = FindObjectOfType< InputManager.Instance.PlayerInputSettings;
 
         if(checkForWallCollision)
             hits = new RaycastHit2D[9];
@@ -138,19 +148,32 @@ public class PlayerMovement : MonoBehaviour
         inputActionMap.FindAction("DashRight").started -= DashRight_started;
     }
 
+    private void UpdateState(string newState)
+    {
+        if(newState != state)
+        {
+            state = newState;
+            eventDictionary?.Invoke(state);
+        }
+    }
+
     private void Movement_performed(UnityEngine.InputSystem.InputAction.CallbackContext obj)
     {
         movementInput = obj.ReadValue<float>();
 
         if (!IsDashing)
         {
-            if(IsGrounded)
-                eventDictionary?.Invoke("Run");
+            if (IsGrounded)
+                UpdateState("Run");
 
-            if(movementInput > 0f)
-                eventDictionary?.Invoke("Right");
+            if (movementInput > 0f)
+            {
+                UpdateState("Right");
+            }
             else
-                eventDictionary?.Invoke("Left");
+            {
+                UpdateState("Left");
+            }
         }
     }
 
@@ -158,12 +181,13 @@ public class PlayerMovement : MonoBehaviour
     {
         movementInput = 0f;
 
-        eventDictionary?.Invoke("Stop");
+        if(IsGrounded)
+            UpdateState("Stop");
     }    
 
     private void Jump_started(UnityEngine.InputSystem.InputAction.CallbackContext obj)
     {
-        Jump();        
+        Jump();
     }
 
     private void Jump_canceled(UnityEngine.InputSystem.InputAction.CallbackContext obj)
@@ -194,35 +218,37 @@ public class PlayerMovement : MonoBehaviour
         RaycastHit2D checkForWall = Physics2D.Raycast(transform.position, Vector2.right * dash, dashDistance, obstacles);
         if(checkForWall.collider == null) checkForWall = Physics2D.Raycast((Vector2)transform.position - new Vector2(0f, boxExtent.y), Vector2.right * dash, dashDistance, obstacles);
         if (checkForWall.collider == null) checkForWall = Physics2D.Raycast((Vector2)transform.position + new Vector2(0f, boxExtent.y), Vector2.right * dash, dashDistance, obstacles);
+
         if (checkForWall.collider != null && checkForWall.collider != boxCollider2D)
         {
             target = checkForWall.distance - boxExtent.x;
         }
 
         float duration = (target / dashDistance) * dashDuration;
+        UpdateState("Dash");
 
         dashTween = transform.DOMoveX(transform.position.x + target * dash, duration)
             .SetEase(dashCurve)
             .OnComplete(() =>
             {
                 dash = 0;
-                eventDictionary?.Invoke("StopDash");
+                UpdateState("StopDash");
                 dashTween.Kill();
-            });
-
-        eventDictionary?.Invoke("Dash");
+            });        
     }
     
 
     private void Jump()
     {
+        if(!CanJump) return;
+
         if (!IsGrounded)
         {
             if(jumping && Velocity.y > multiJumpFallingThreshold && jump_release && jumpCount < multiJumps)
             {
                 rigid2D.velocity = new Vector2(Velocity.x, 0f);
                 rigid2D.AddForce(Vector2.up * jumpForce, ForceMode2D.Impulse);
-                eventDictionary?.Invoke("MultiJump");
+                UpdateState("MultiJump");
                 jumpCount++;
             }
 
@@ -235,12 +261,13 @@ public class PlayerMovement : MonoBehaviour
         jumping = true;
         rigid2D.velocity = new Vector2(Velocity.x, 0f);
         rigid2D.AddForce(Vector2.up * jumpForce, ForceMode2D.Impulse);
-        eventDictionary?.Invoke("Jump");
+        UpdateState("Jump");
     }
     
 
     private void FixedUpdate()
     {
+        //Dashes override other movement, handle first.
         if (IsDashing)
         {
             rigid2D.velocity = Vector2.zero;
@@ -255,21 +282,18 @@ public class PlayerMovement : MonoBehaviour
             }
         }
 
+        bool wasGrounded = IsGrounded;
 
+        //Check if feet hit the ground
         Vector2 pos = transform.position;
         Vector2 feet = new Vector3(pos.x, pos.y - boxExtent.y);
-
-        //Raycast feet
         hits[0] = Physics2D.Raycast(feet, Vector2.down, rayLength, ground);
         hits[1] = Physics2D.Raycast(feet + new Vector2(boxExtent.x, 0f), Vector2.down, rayLength, ground);
         hits[2] = Physics2D.Raycast(feet - new Vector2(boxExtent.x, 0f), Vector2.down, rayLength, ground);
-
-        bool wasGrounded = IsGrounded;
-
         //Any hits?
-        for(int i = 0; i < hits.Length; i++)
+        for (int i = 0; i < hits.Length; i++)
         {
-            grounded = hits[i].collider != null;
+            grounded = hits[i].collider != null && hits[i].transform ;
             if (IsGrounded) break;            
         }
 
@@ -277,14 +301,6 @@ public class PlayerMovement : MonoBehaviour
         {
             Landed(jumping);
         }
-
-        if(!lastFalling && IsFalling)
-        {
-            eventDictionary?.Invoke("Fall");
-            lastFalling = true;
-        }
-
-        lastFalling = InAir && Velocity.y < 0f;
 
         //Handle Jump
         if(jumping && InAir)
@@ -308,10 +324,8 @@ public class PlayerMovement : MonoBehaviour
 
     private void Landed(bool wasJumping)
     {
-        if(wasJumping)
+        if (wasJumping)
         {
-            eventDictionary?.Invoke("Land");
-
             jumpCount = 0;
             if (!jump_release)
                 Jump();
@@ -319,8 +333,11 @@ public class PlayerMovement : MonoBehaviour
             {
                 jumping = false;
                 jump_release = false;
+                UpdateState("Land");
             }            
         }
+        else
+            UpdateState("Land");
     }
 
     private void GroundMovement()

@@ -18,12 +18,12 @@ public struct PlayerControllerData
     public PlayerMovement playerMovement;
 }
 
-public class InputManager : Singleton<InputManager>
+public class InputManager : MonoBehaviour
 {
     public const int MAX_PLAYERS = 4;
-
     int playersActive = 0;
     bool RoomForPlayers { get { return playersActive < MAX_PLAYERS; } }
+
     Dictionary<ControllerType, int> controllerCount = new Dictionary<ControllerType, int>();    
     PlayerInput[] players = new PlayerInput[MAX_PLAYERS];
     InputDevice[] devices = new InputDevice[MAX_PLAYERS];
@@ -41,10 +41,10 @@ public class InputManager : Singleton<InputManager>
 
     List<int> secondaryKeyboards;
 
-    protected override void Awake()
-    {
-        base.Awake();
+    bool joinable = true;
 
+    private void Awake()
+    {
         playerInputSettings = new PlayerInputSettings();
     }
 
@@ -69,20 +69,21 @@ public class InputManager : Singleton<InputManager>
 
     private void keyboardJoinAction_started(InputAction.CallbackContext obj)
     {
-        if (DeviceExists(obj.control.device)) return;
+        if (DeviceExists(obj.control.device) || !joinable) return;
+
         if (RoomForPlayers && controllerCount[ControllerType.Keyboard] <= 2)
         {
             devices[playersActive] = obj.control.device;
             PlayerInput input = PlayerInput.Instantiate(playerPrefab, controlScheme: "Keyboard");
             PlayerJoin(input);
             controllerCount[ControllerType.Keyboard]++;
-            //joiningControllerType = ControllerType.Keyboard;
-            //PlayerInputManager.instance.JoinPlayer(playersActive);
         }
     }
 
     private void SecondaryKeyboardJoin_started(InputAction.CallbackContext obj)
     {
+        if(!joinable) return;
+
         if (RoomForPlayers && controllerCount[ControllerType.Keyboard] > 0 && controllerCount[ControllerType.SecondaryKeyboard] < controllerCount[ControllerType.Keyboard])
         {
             devices[playersActive] = obj.control.device;
@@ -94,16 +95,14 @@ public class InputManager : Singleton<InputManager>
 
     private void gamepadJoinAction_started(InputAction.CallbackContext obj)
     {
-        if (DeviceExists(obj.control.device)) return;
+        if (DeviceExists(obj.control.device) || !joinable) return;
+
         if (RoomForPlayers && controllerCount[ControllerType.Gamepad] <= 4)
         {
             devices[playersActive] = obj.control.device;
             PlayerInput input = PlayerInput.Instantiate(playerPrefab, controlScheme: "Gamepad");
             PlayerJoin(input);
             controllerCount[ControllerType.Gamepad]++;
-            //PlayerInput.Instantiate(playerPrefab, controlScheme: "Gamepad");
-            //joiningControllerType = ControllerType.Gamepad;
-            //PlayerInputManager.instance.JoinPlayerFromActionIfNotAlreadyJoined(obj);
         }
     }
     private void PlayerJoin(PlayerInput input)
@@ -113,6 +112,7 @@ public class InputManager : Singleton<InputManager>
         if (movement != null)
         {
             movement.PlayerInput = input;
+            movement.PlayerInputSettings = playerInputSettings;
             movement.InputActionMap = input.currentActionMap;
         }
 
